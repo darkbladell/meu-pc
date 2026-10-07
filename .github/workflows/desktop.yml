@@ -1,0 +1,32 @@
+name: Linux Desktop
+
+on:
+  workflow_dispatch:
+
+jobs:
+  desktop:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Atualizar sistema
+        run: |
+          sudo apt-get update
+
+      - name: Instalar XFCE
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            xfce4 \
+            xfce4-goodies \
+            xorg \
+            dbus-x11
+
+      - name: Verificar instalação
+        run: |
+          echo "XFCE instalado!"
+          xfce4-session --version || true
+          echo "Sistema:"
+          uname -a
+          echo "Memória:"
+          free -h
+          echo "CPU:"
+          nproc
