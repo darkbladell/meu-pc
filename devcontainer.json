@@ -1,0 +1,9 @@
+{
+  "name": "Linux Desktop + AnyDesk",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "remoteUser": "vscode",
+  "forwardPorts": [],
+  "postCreateCommand": "bash /workspaces/${localWorkspaceFolderBasename}/.devcontainer/start-desktop.sh"
+}
