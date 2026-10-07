@@ -6,27 +6,111 @@ on:
 jobs:
   desktop:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
 
     steps:
-      - name: Atualizar sistema
+      - name: Instalar desktop e noVNC
         run: |
           sudo apt-get update
 
-      - name: Instalar XFCE
-        run: |
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
             xfce4 \
             xfce4-goodies \
-            xorg \
+            xfce4-terminal \
+            xvfb \
+            x11vnc \
+            wget \
+            curl \
+            python3 \
             dbus-x11
 
-      - name: Verificar instalação
+          mkdir -p "$HOME/novnc"
+
+          wget -qO- https://github.com/novnc/noVNC/archive/refs/heads/master.tar.gz \
+            | tar xz --strip-components=1 -C "$HOME/novnc"
+
+          wget -qO- https://github.com/novnc/websockify/archive/refs/heads/master.tar.gz \
+            | tar xz --strip-components=1 -C "$HOME/novnc/utils/websockify"
+
+      - name: Iniciar desktop XFCE
         run: |
-          echo "XFCE instalado!"
-          xfce4-session --version || true
-          echo "Sistema:"
-          uname -a
-          echo "Memória:"
-          free -h
-          echo "CPU:"
-          nproc
+          export DISPLAY=:99
+
+          Xvfb :99 \
+            -screen 0 1280x720x24 \
+            -ac \
+            +extension GLX \
+            +render \
+            -noreset &
+
+          sleep 3
+
+          dbus-launch --exit-with-session \
+            startxfce4 >/tmp/xfce.log 2>&1 &
+
+          sleep 8
+
+          x11vnc \
+            -display :99 \
+            -forever \
+            -shared \
+            -rfbport 5900 \
+            -nopw \
+            >/tmp/x11vnc.log 2>&1 &
+
+          sleep 3
+
+      - name: Iniciar noVNC
+        run: |
+          export DISPLAY=:99
+
+          "$HOME/novnc/utils/novnc_proxy" \
+            --vnc localhost:5900 \
+            --listen 6080 \
+            >/tmp/novnc.log 2>&1 &
+
+          sleep 5
+
+          echo "=========================================="
+          echo "DESKTOP XFCE INICIADO"
+          echo "Porta local: 6080"
+          echo "=========================================="
+
+      - name: Criar túnel temporário
+        run: |
+          wget -q \
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+            -O cloudflared
+
+          chmod +x cloudflared
+
+          ./cloudflared tunnel \
+            --url http://localhost:6080 \
+            --no-autoupdate \
+            2>&1 | tee /tmp/tunnel.log &
+
+          sleep 10
+
+          echo ""
+          echo "=========================================="
+          echo "LINK DO DESKTOP"
+          echo "=========================================="
+
+          grep -oE 'https://[-a-zA-Z0-9]+\.trycloudflare\.com' \
+            /tmp/tunnel.log | head -1 || true
+
+          echo "=========================================="
+
+      - name: Manter o desktop funcionando
+        run: |
+          echo "O desktop ficará disponível enquanto este job estiver executando."
+          echo "Não feche esta execução."
+
+          while true; do
+            sleep 60
+
+            if ! pgrep -f "Xvfb :99" >/dev/null; then
+              echo "Xvfb foi encerrado."
+              exit 1
+            fi
+          done
